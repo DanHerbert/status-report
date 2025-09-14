@@ -13,9 +13,9 @@ mapfile -t user_names < <(loginctl list-users | tail -n+2 | head -n-2 | grep 'ye
 declare -A previous_states
 if [[ -e "$status_path" ]] && (( $(wc -l < "$status_path") > 0 )); then
     while IFS="" read -r line || [ -n "$line" ]; do
-        user=$(echo "$line" | awk '{ print $2 }')
-        state=$(echo "$line" | awk '{ print $3 }')
-        timestamp=$(echo "$line" | awk '{ print $4 }')
+        user=$(echo "$line" | awk '{ print $1 }')
+        state=$(echo "$line" | awk '{ print $2 }')
+        timestamp=$(echo "$line" | awk '{ print $3 }')
         previous_states["$user"]="$state $timestamp"
     done < "$status_path"
 fi
@@ -30,7 +30,7 @@ timestamp=$(date -u +%s)
 if [[ $system_state == "$prev_state" ]] && [[ -n "$prev_timestamp" ]]; then
     timestamp=$prev_timestamp
 fi
-echo "system_state root $system_state $timestamp" >> "$status_path"
+echo "root $system_state $timestamp" >> "$status_path"
 
 for uname in "${user_names[@]}"; do
     user_system_state="$(systemctl --machine="$uname"@ --user show --value --property=SystemState)"
@@ -39,9 +39,9 @@ for uname in "${user_names[@]}"; do
     prev_timestamp=$(echo "$previous_state_details" | awk '{ print $2 }')
     timestamp=$(date -u +%s)
     if [[ $system_state == "$prev_state" ]] && [[ -n "$prev_timestamp" ]]; then
-        timestamp=$(echo "$previous_state_details" | awk '{ print $2 }')
+        timestamp="$prev_timestamp"
     fi
-    echo "system_state $uname $user_system_state $timestamp" >> "$status_path"
+    echo "$uname $user_system_state $timestamp" >> "$status_path"
 done
 
 truncate -s 0 "$mail_path"
