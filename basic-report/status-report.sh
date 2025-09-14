@@ -38,7 +38,7 @@ for uname in "${user_names[@]}"; do
     prev_state=$(echo "$previous_state_details" | awk '{ print $1 }')
     prev_timestamp=$(echo "$previous_state_details" | awk '{ print $2 }')
     timestamp=$(date -u +%s)
-    if [[ $system_state == "$prev_state" ]] && [[ -n "$prev_timestamp" ]]; then
+    if [[ $user_system_state == "$prev_state" ]] && [[ -n "$prev_timestamp" ]]; then
         timestamp="$prev_timestamp"
     fi
     echo "$uname $user_system_state $timestamp" >> "$status_path"
