@@ -6,5 +6,5 @@ ConditionPathExists=!/tmp/nas-permissions-service.lock
 [Service]
 Type=oneshot
 ExecStartPre=/bin/sh -c 'touch /tmp/status-report-service.lock'
-ExecStart=/bin/sh -c "exec $PROJECT_PATH/systemd/status-report.sh"
+ExecStart=/bin/sh -c "exec $PROJECT_PATH/basic-report/status-report.sh"
 ExecStopPost=/bin/sh -c 'rm /tmp/status-report-service.lock'
