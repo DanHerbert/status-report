@@ -50,6 +50,9 @@ if mail -e >/dev/null 2>&1; then
 fi
 for uname in "${user_names[@]}"; do
     if [[ -e "/var/mail/$uname" ]] || [[ -e "/var/spool/mail/$uname" ]]; then
-        echo "$uname yes" >> "$mail_path"
+        if (( "$(wc --bytes < <(cat "/var/mail/$uname"))" > 0 )) ||
+                (( "$(wc --bytes < <(cat "/var/spool/mail/$uname"))" > 0 )); then
+            echo "$uname yes" >> "$mail_path"
+        fi
     fi
 done
