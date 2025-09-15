@@ -46,10 +46,10 @@ done
 
 truncate -s 0 "$mail_path"
 if mail -e >/dev/null 2>&1; then
-    echo "mailbox_unread root yes" >> "$mail_path"
+    echo "root yes" >> "$mail_path"
 fi
 for uname in "${user_names[@]}"; do
     if [[ -e "/var/mail/$uname" ]] || [[ -e "/var/spool/mail/$uname" ]]; then
-        echo "mailbox_unread $uname yes" >> "$mail_path"
+        echo "$uname yes" >> "$mail_path"
     fi
 done
