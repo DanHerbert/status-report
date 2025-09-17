@@ -9,6 +9,8 @@ primary_user_state_home="/home/dan/.local/state"
 app_state_path="$primary_user_state_home/dotfiles"
 status_path="$app_state_path/system_state"
 mail_path="$app_state_path/mail_state"
+raid_path="$app_state_path/raid_failure"
+
 mapfile -t user_names < <(loginctl list-users | tail -n+2 | head -n-2 | grep 'yes' | awk '{ print $2 }')
 declare -A previous_states
 if [[ -e "$status_path" ]] && (( $(wc -l < "$status_path") > 0 )); then
@@ -44,6 +46,8 @@ for uname in "${user_names[@]}"; do
     echo "$uname $user_system_state $timestamp" >> "$status_path"
 done
 
+# Some system failures are reported to the local mailbox, so checking mail can
+# sometimes reveal problems.
 truncate -s 0 "$mail_path"
 if mail -e >/dev/null 2>&1; then
     echo "root yes" >> "$mail_path"
@@ -54,5 +58,16 @@ for uname in "${user_names[@]}"; do
                 (( "$(wc --bytes < <(cat "/var/spool/mail/$uname"))" > 0 )); then
             echo "$uname yes" >> "$mail_path"
         fi
+    fi
+done
+
+# If the system has any RAID arrays, check if there are any failures.
+if [[ -e "$raid_path" ]]; then
+    rm "$raid_path"
+fi
+find /dev -maxdepth 1 -name 'md*' 2>/dev/null | while read -r raid_volume; do
+    failed_count=$(mdadm --detail "$raid_volume" | grep 'Failed Devices' | awk -F ' : ' '{ print $2 }')
+    if [[ $failed_count -gt 0 ]]; then
+        mdadm --detail "$raid_volume" > "$raid_path" 2>&1
     fi
 done
