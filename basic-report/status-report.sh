@@ -5,7 +5,10 @@ if [[ $EUID != 0 ]]; then
     exit 1
 fi
 
-primary_user_state_home="/home/dan/.local/state"
+primary_uid=$(grep -m 1 -E '^UID_MIN\s' /etc/login.defs | awk '{ print $2 }')
+primary_user=$(id -nu "$primary_uid")
+user_home=$(eval echo "~${primary_user}")
+primary_user_state_home="$user_home/.local/state"
 app_state_path="$primary_user_state_home/dotfiles"
 status_path="$app_state_path/system_state"
 mail_path="$app_state_path/mail_state"
