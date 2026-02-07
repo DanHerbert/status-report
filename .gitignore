@@ -1,2 +1,8 @@
-/basic-report/status-report.service.conf
+/bin/
+/node_modules/
+/reports/
+/src/config_*.yaml
+/src/config.yaml
+/systemd/html-status-report.service.conf
+/systemd/status-report.service.conf
 /venv/
