@@ -1,0 +1,22 @@
+[project]
+version = "0.1.0"
+name = "status-report"
+description = "Server status report generator"
+authors = [{name = "Dan Herbert", email = "sr-dan@hrbrt.co"}]
+readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE.txt"]
+requires-python = ">= 3.11"
+dependencies = [
+  "psutil==7.2.*",
+  "python-dateutil==2.9.*",
+  "pyyaml==6.0.*",
+  "jinja2==3.1"
+]
+classifiers = [
+  "Development Status :: 5 - stable",
+  "Intended Audience :: End Users/Desktop",
+]
+
+[project.urls]
+repository = "https://github.com/DanHerbert/status-report"

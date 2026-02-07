@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "outDir": "/srv/www/status.herbert.io/",
+    "target": "es2023",
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+  },
+  "include": [ "./src/*.ts" ],
+}

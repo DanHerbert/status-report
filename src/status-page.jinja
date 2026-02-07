@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Server Status</title>
+  <meta name="viewport" content="width=device-width">
+  <meta name="theme-color" content="#81c784">
+  <link rel="stylesheet" type="text/css" href="./main.css">
+</head>
+<body>
+
+  <header class="overall-health">
+    {% if all_systems_ok %}
+    <svg role="presentation" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="check-ok-icon"><path fill="currentColor" d="M12 2.25c-5.376 0-9.75 4.374-9.75 9.75s4.374 9.75 9.75 9.75 9.75-4.374 9.75-9.75S17.376 2.25 12 2.25Zm5.074 6.482-6.3 7.5a.748.748 0 0 1-.562.268h-.013a.75.75 0 0 1-.557-.248l-2.7-3a.751.751 0 0 1 .88-1.186c.09.045.17.107.234.182l2.123 2.36 5.747-6.84a.75.75 0 0 1 1.148.964Z"></path></svg>
+    <h1 class="overall-health-heading">All systems operational</h1>
+    {% else %}
+    <svg role="presentation" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="system-down-icon"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2ZM8.796 7.42A.973.973 0 1 0 7.42 8.796L10.624 12 7.42 15.204a.973.973 0 0 0 1.376 1.376L12 13.376l3.204 3.204a.973.973 0 1 0 1.376-1.376L13.376 12l3.204-3.204a.973.973 0 1 0-1.376-1.376L12 10.624 8.796 7.42Z" fill="currentColor"></path></svg>
+    <h1 class="overall-health-heading">Some issues found</h1>
+    {% endif %}
+  </header>
+
+  <ul class="system-report-list">
+    {% for report in system_reports %}
+    <li class="system-report">
+      <h2 class="system-name">{{ report.system_name}}</h2>
+      <div class="system-health">
+      {% if report.this_system_ok %}
+        <svg role="presentation" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="check-ok-icon"><path fill="currentColor" d="M12 2.25c-5.376 0-9.75 4.374-9.75 9.75s4.374 9.75 9.75 9.75 9.75-4.374 9.75-9.75S17.376 2.25 12 2.25Zm5.074 6.482-6.3 7.5a.748.748 0 0 1-.562.268h-.013a.75.75 0 0 1-.557-.248l-2.7-3a.751.751 0 0 1 .88-1.186c.09.045.17.107.234.182l2.123 2.36 5.747-6.84a.75.75 0 0 1 1.148.964Z"></path></svg>
+        <span class="system-health-label">All systems operational</span>
+      {% else %}
+        <svg role="presentation" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="system-down-icon"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2ZM8.796 7.42A.973.973 0 1 0 7.42 8.796L10.624 12 7.42 15.204a.973.973 0 0 0 1.376 1.376L12 13.376l3.204 3.204a.973.973 0 1 0 1.376-1.376L13.376 12l3.204-3.204a.973.973 0 1 0-1.376-1.376L12 10.624 8.796 7.42Z" fill="currentColor"></path></svg>
+        <span class="system-health-label">Some issues found</span>
+      {% endif %}
+      </div>
+      <time class="report-generated-time" datetime="{{ report.generated_datetime }}">{{ report.generated_datetime }}</time>
+      <ul class="status-checks">
+        {% for check in report.status_checks %}
+          <li class="status-check">
+            <span class="check-label">{{ check.label }}</span>
+            <span class="check-state">
+              {% if check.timer_last_trigger %}
+                (<time class="check-time" datetime="{{ check.timer_last_trigger }}"></time>)
+              {% endif%}
+              {{ check.state }}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+      <ul class="disk-checks">
+        {% for disk in report.disks %}
+          <li class="disk-check">
+            <span class="disk-label">{{ disk.label }}</span>
+            <span class="disk-usage">
+              {{ disk.usage }}
+              {% if disk.failed_devices and disk.failed_devices > 0 %}
+                <span>failed devices: {{ disk.failed_devices }}</span>
+              {% endif %}
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+      <ul class="needrestart-checks">
+        <li class="needrestart-check">
+          <span class="needrestart-label">Outdated kernel?</span>
+          <span class="needrestart-value">{% if report.needrestart.outdated_kernel %}yes{% else %}no{% endif %}</span>
+        </li>
+        <li class="needrestart-check">
+          <span class="needrestart-label">Services needing restart: </span>
+          <span class="needrestart-value">{{ report.needrestart.services_needing_restarts }}</span>
+        </li>
+        <li class="needrestart-check">
+          <span class="needrestart-label">Users with outdated binaries: </span>
+          <span class="needrestart-value">{{ report.needrestart.users_with_outdated_binaries }}</span>
+        </li>
+      </ul>
+      <ul class="system-metadata">
+        <li class="metadata-item">
+          <span class="metadata-label">Uptime</span>
+          <span class="metadata-value"><time class="uptime" datetime="{{ report.boot_datetime }}"></time></span>
+        </li>
+      </ul>
+    </li>
+    {% endfor %}
+  </ul>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+log_level: DEBUG
+# Use this alternative format for more helpful dev logging:
+# [%(asctime)s] %(levelname)s:%(name)s [%(funcName)s:%(lineno)d] %(message)s
+log_format: "%(levelname)s:%(name)s:%(message)s"
+log_datefmt: "%Y-%m-%dT%H:%M:%S"
+output_file: "/absolute/path/for/status.json"
+json_reports_search_path: "/absolute/path/to/project/reports/"
+json_report_output_file: "/absolute/path/to/project/reports/status.json"
+web_output_dir: "/absolute/path/for/web/output"
+html_report_output_file: "/absolute/path/for/web/output/index.html"
+scp_command: "scp -o BatchMode=yes /absolute/path/for/status.json example.com:/absolute/path/for/status-hostname1.json"
+acceptable_disk_usage: 80 # In percentage
+system_name: 'example.com'
+status_checks:
+  - label: 'System State'
+    machine: ".host"
+    is_user: false
+  - label: 'User State (username)'
+    machine: "username@.host"
+    is_user: true
+  - label: 'syncthing@username Service'
+    machine: ".host"
+    is_user: false
+    unit: "syncthing@username.service"
+  - label: 'Automatic updates'
+    machine: ".host"
+    is_user: false
+    expected_interval_secs: 86460
+    unit: "apt-daily-upgrade.timer"
+  - label: "Sample Path Unit"
+    machine: ".host"
+    is_user: false
+    unit: "sample-path-unit.path"
+disks:
+  - path: "/media/raid1"
+    raid: /dev/md0
+    label: "storage"
+  - path: "/"
+    label: "system"
+  - path: "/boot"
+    label: "boot"

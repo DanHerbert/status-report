@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic system status report generation
+After=network-online.target
+
+[Timer]
+Unit=status-report-json.service
+OnBootSec=1m
+OnUnitActiveSec=1m
+
+[Install]
+WantedBy=timers.target

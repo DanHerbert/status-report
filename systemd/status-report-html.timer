@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic HTML status report generation
+After=network-online.target
+
+[Timer]
+Unit=html-status-report.service
+OnBootSec=1m
+OnUnitActiveSec=1m
+
+[Install]
+WantedBy=timers.target

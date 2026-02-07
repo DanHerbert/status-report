@@ -1,8 +1,10 @@
 /bin/
+/build/
 /node_modules/
 /reports/
+/src/status_report.egg-info
 /src/config_*.yaml
 /src/config.yaml
-/systemd/html-status-report.service.conf
-/systemd/status-report.service.conf
+/systemd/status-report-html.service.conf
+/systemd/status-report-json.service.conf
 /venv/

@@ -1,0 +1,14 @@
+{
+  "name": "status-report",
+  "version": "0.1.0",
+  "type": "module",
+  "author": "Dan Herbert <status-report-dan@hrbrt.co> (https://dan.herbert.io/)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DanHerbert/status-report.git"
+  },
+  "dependencies": {
+    "stylus": "^0.64",
+    "typescript": "^5.9"
+  }
+}

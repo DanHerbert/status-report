@@ -1,0 +1,7 @@
+[Unit]
+Description=System status report generation
+After=multi-user.target network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "exec $SERVICE_ROOT/src/gen_report_json.py"

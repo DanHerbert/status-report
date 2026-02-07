@@ -1,0 +1,7 @@
+[Unit]
+Description=HTML status report generation
+After=multi-user.target network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "exec $SERVICE_ROOT/src/gen_report_html.py"

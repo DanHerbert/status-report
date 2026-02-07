@@ -1,0 +1,120 @@
+*,
+*::before,
+*::after
+  margin 0
+  padding 0
+  box-sizing border-box
+
+html
+  font-family sans-serif
+  font-size 20px
+
+body
+  margin-left auto
+  margin-right auto
+  max-width 500px
+  padding-top 5vh
+  padding-left 16px
+  padding-right 16px
+
+.overall-health
+  align-items center
+  display flex
+  justify-content center
+
+.overall-health-heading
+  font-size 1.6rem
+
+.overall-health .system-down-icon,
+.overall-health .check-ok-icon
+  flex 0 0 34px
+  height 34px
+  margin-right 16px
+  width 34px
+
+.system-report
+  margin-top 30px
+
+.system-name
+  display flex
+  font-size 1.5rem
+  text-align center
+
+.system-name::before,
+.system-name::after
+  align-self center
+  border-bottom 2px solid #000
+  content ' '
+  display inline-block
+  flex-grow 1
+  margin-bottom 3px
+
+.system-name::before
+  margin-right 8px
+
+.system-name::after
+  margin-left 8px
+
+.system-health
+  align-items center
+  display flex
+  font-size 1.1rem
+  justify-content center
+
+.system-report-list,
+.status-checks,
+.disk-checks,
+.needrestart-checks,
+.system-metadata
+  list-style none
+
+.system-down-icon,
+.check-ok-icon
+  height 20px
+  width 20px
+  margin-right 8px
+
+.check-ok-icon
+  color #60aa55
+  fill #60aa55
+
+.system-down-icon
+  color #8f485d
+  fill #8f485d
+
+.report-generated-time
+  display block
+  font-size .7rem
+  margin-top 4px
+  margin-bottom 4px
+  text-align center
+
+.status-check,
+.disk-check,
+.needrestart-check,
+.metadata-item
+  display flex
+  margin-bottom 8px
+  font-size .8rem
+
+.check-label,
+.disk-label,
+.needrestart-label,
+.metadata-label
+  flex-grow 1
+  display flex
+
+
+.check-label::after,
+.disk-label::after,
+.needrestart-label::after,
+.metadata-label::after
+  border-bottom 1px dotted #000
+  content ' '
+  display inline-block
+  flex-grow 1
+  flex-shrink 1
+
+.disk-failures
+  color hsl(0, 100%, 32%)
+  font-weight 600
