@@ -3,7 +3,7 @@ Description=Periodic HTML status report generation
 After=network-online.target
 
 [Timer]
-Unit=html-status-report.service
+Unit=status-report-html.service
 OnBootSec=1m
 OnUnitActiveSec=1m
 
