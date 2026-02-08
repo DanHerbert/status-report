@@ -49,7 +49,7 @@ class PathUnit:
     unit_inactive_enter: datetime = None
 
 
-logger = logging.getLogger("gen_report")
+logger = logging.getLogger("gen_report_json")
 
 SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(SCRIPT_PATH, "config.yaml")
