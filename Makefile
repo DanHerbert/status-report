@@ -41,9 +41,15 @@ HTML_CONF_DEST_DIR := /etc/systemd/system/$(HTML_SERVICE_FILE).d
 .PHONY: install-report-json install-report-html uninstall-report-json uninstall-report-html enable-report-json enable-report-html web watch-web
 
 configure:
+	if [ ! -f "./bin/yq" ]; then \
+		mkdir -p ./bin/; \
+		wget "https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_$(PLATFORM)_$(ARCH)" -O ./bin/yq && chmod +x ./bin/yq; \
+	fi
 	python3 -m venv "$(VENV_PATH)"
 	VIRTUAL_ENV="$(VENV_PATH)"; PATH="$(PYBIN_PATH):$$PATH"; pip install .
 	pnpm install
+	REPORTS_DIR=$(shell ./bin/yq '.json_reports_search_path' $(YAML_CONFIG)); \
+	mkdir -p "$$REPORTS_DIR"
 
 install-report-json:
 	@echo "Checking for configuration file..."
