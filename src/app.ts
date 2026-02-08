@@ -72,12 +72,16 @@ function timesToRelative() {
       seconds: seconds % 60,
     };
 
+    let newDelta: string;
     if (timeElem.classList.contains("uptime")) {
-      timeElem.innerText = formatTimeDeltaShort(delta, "");
+      newDelta = formatTimeDeltaShort(delta, "");
     } else if (timeElem.classList.contains("check-time")) {
-      timeElem.innerText = formatTimeDeltaShort(delta, "ago");
+      newDelta = formatTimeDeltaShort(delta, "ago");
     } else {
-      timeElem.innerText = formatTimeDeltaLong(delta, "ago");
+      newDelta = formatTimeDeltaLong(delta, "ago");
+    }
+    if (newDelta !== timeElem.innerText) {
+      timeElem.innerText = newDelta;
     }
   });
 }
