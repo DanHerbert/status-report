@@ -141,4 +141,4 @@ watch-web:
 	pnpm install
 	WEB_OUTDIR=$(shell ./bin/yq '.web_output_dir' $(YAML_CONFIG)); \
 	pnpm exec stylus --watch --out "$$WEB_OUTDIR" ./src/main.styl & \
-	pnpm exec tsc --watch --outDir $$WEB_OUTDIR
+	pnpm exec tsc --watch --outDir "$$WEB_OUTDIR"
