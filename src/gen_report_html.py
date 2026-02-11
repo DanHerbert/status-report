@@ -9,6 +9,8 @@ from pathlib import Path
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from config import get_config, DiskCheck, StatusCheck
+
 
 logger = logging.getLogger("gen_report_html")
 
