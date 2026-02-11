@@ -139,15 +139,17 @@ def run_sctl_command(check: StatusCheck, unit: str | None = None):
     return result_dict
 
 
-def to_timestamp_if_exists(timestamp: str):
-    (
+def to_timestamp_if_exists(timestamp: str) -> datetime | None:
+    return (
         parser.parse(timestamp)
         if timestamp is not None and len(timestamp.strip()) > 0
         else None
     )
 
 
-def run_unit_query(check: StatusCheck, unit: str) -> ServiceUnit | TimerUnit | PathUnit | None:
+def run_unit_query(
+    check: StatusCheck, unit: str
+) -> ServiceUnit | TimerUnit | PathUnit | None:
     result = run_sctl_command(check, unit)
     [_, unit_type] = unit.split(".")
     match unit_type:
@@ -184,11 +186,15 @@ def run_unit_query(check: StatusCheck, unit: str) -> ServiceUnit | TimerUnit | P
             result = run_sctl_command(check, path_unit.binds_to)
             path_unit.bind_load_state = result["LoadState"]
             path_unit.bind_active_state = result["ActiveState"]
-            path_unit.bind_inactive_enter = to_timestamp_if_exists(result["InactiveEnterTimestamp"])
+            path_unit.bind_inactive_enter = to_timestamp_if_exists(
+                result["InactiveEnterTimestamp"]
+            )
             result = run_sctl_command(check, path_unit.unit)
             path_unit.unit_result = result["Result"]
             path_unit.unit_load_state = result["LoadState"]
-            path_unit.unit_inactive_enter = to_timestamp_if_exists(result["InactiveEnterTimestamp"])
+            path_unit.unit_inactive_enter = to_timestamp_if_exists(
+                result["InactiveEnterTimestamp"]
+            )
             return path_unit
 
 
@@ -208,8 +214,17 @@ def do_unit_check(check: StatusCheck, output):
             expected_trigger_delta = timedelta(seconds=check.expected_interval_secs)
             timer_state = (
                 "ok"
-                if last_trigger_delta < expected_trigger_delta
-                and timer.active_state == "active"
+                if timer.active_state == "active"
+                and (
+                    last_trigger_delta < expected_trigger_delta
+                    or (
+                        timer.active_enter is not None
+                        and boot_timedelta < expected_trigger_delta
+                        # After a reboot, last_trigger is empty, so if there has been a
+                        # recent reboot, assume timer is ok if it is active.
+                        and (timer.active_enter - boot_time).total_seconds() < 120
+                    )
+                )
                 else timer.active_state
             )
             service_state = "ok" if service.result == "success" else service.result
