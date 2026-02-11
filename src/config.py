@@ -18,7 +18,7 @@ class StatusCheck:
     machine: str
     is_user: bool = False
     unit: Optional[str] = None
-    expected_interval: Optional[timedelta] = None
+    expected_interval_secs: int = None
 
 
 @dataclass
@@ -33,15 +33,14 @@ class Config:
     log_level: str
     log_format: str
     log_datefmt: str
-    output_file: Path
     json_reports_search_path: Path
     json_report_output_file: Path
-    web_output_dir: Path
-    html_report_output_file: Path
     acceptable_disk_usage: int
     system_name: str
     status_checks: list[StatusCheck]
     disks: list[DiskCheck]
+    html_report_output_file: Path = None
+    web_output_dir: Path = None
     scp_command: str = None
 
 

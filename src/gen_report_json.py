@@ -14,7 +14,7 @@ import yaml
 import psutil
 from dateutil import parser
 
-from config import get_config
+from config import get_config, DiskCheck, StatusCheck
 
 
 @dataclass
@@ -45,7 +45,7 @@ class PathUnit:
     binds_to: str
     bind_load_state: str = None
     bind_active_state: str = None
-    bind_active_enter: datetime = None
+    bind_inactive_enter: datetime = None
     unit_load_state: str = None
     unit_result: str = None
     unit_inactive_enter: datetime = None
@@ -82,7 +82,6 @@ def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]
         cmd_args.append("--user")
     cmd_args.append(f"--machine={check.machine}")
     cmd_args.append("show")
-    cmd_args.append("--value")
     if unit is None:
         cmd_args.append("--property=SystemState")
     else:
@@ -106,20 +105,18 @@ def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]
 
 def run_system_check(check: StatusCheck, output):
     result = run_sctl_command(check)
-    if result.returncode != 0:
-        logger.error(f"Command failed for [{check}] " f"with output:\n{result.stdout}")
-    result_state = result.stdout.strip()
+    sys_state = result["SystemState"]
     output["status_checks"].append(
         {
             "label": check.label,
-            "state": "ok" if result_state == "running" else result_state,
+            "state": "ok" if sys_state == "running" else sys_state,
         }
     )
 
 
 def run_sctl_command(check: StatusCheck, unit: str | None = None):
     cmd_args = build_sctl_command(check, unit)
-    return subprocess.run(
+    result = subprocess.run(
         cmd_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -127,75 +124,71 @@ def run_sctl_command(check: StatusCheck, unit: str | None = None):
         timeout=5,
         check=False,
     )
-
-
-def run_unit_query(check: StatusCheck, unit: str) -> ServiceUnit | TimerUnit | None:
-    result = run_sctl_command(check, unit)
     if result.returncode != 0:
-        logger.error(f"Command failed for [{unit}] " f"with output:\n{result.stdout}")
+        logger.error(
+            f"Command [{' '.join(cmd_args)}] failed for [{unit}] "
+            f"with output:\n{result.stdout}"
+        )
         return None
     results = result.stdout.split("\n")
+    result_dict = {}
+    for result in results:
+        if len(result) > 0:
+            [key, val] = result.split("=", maxsplit=1)
+            result_dict[key.strip()] = val.strip()
+    return result_dict
+
+
+def to_timestamp_if_exists(timestamp: str):
+    (
+        parser.parse(timestamp)
+        if timestamp is not None and len(timestamp.strip()) > 0
+        else None
+    )
+
+
+def run_unit_query(check: StatusCheck, unit: str) -> ServiceUnit | TimerUnit | PathUnit | None:
+    result = run_sctl_command(check, unit)
     [_, unit_type] = unit.split(".")
     match unit_type:
         case "service":
+            inactive_enter = result["InactiveEnterTimestamp"]
             return ServiceUnit(
-                service_type=results[0],
-                result=results[1],
-                triggered_by=results[2],
-                load_state=results[3],
-                active_state=results[4],
+                service_type=result["Type"],
+                result=result["Result"],
+                triggered_by=result["TriggeredBy"],
+                load_state=result["LoadState"],
+                active_state=result["ActiveState"],
                 inactive_enter=(
-                    parser.parse(results[5]) if len(results[5].strip()) > 0 else None
+                    parser.parse(inactive_enter)
+                    if len(inactive_enter.strip()) > 0
+                    else None
                 ),
             )
         case "timer":
             return TimerUnit(
-                unit=results[0],
-                last_trigger=(
-                    parser.parse(results[1]) if len(results[1].strip()) > 0 else None
-                ),
-                load_state=results[2],
-                active_state=results[3],
-                active_enter=(
-                    parser.parse(results[4]) if len(results[4].strip()) > 0 else None
-                ),
+                unit=result["Unit"],
+                last_trigger=to_timestamp_if_exists(result["LastTriggerUSec"]),
+                load_state=result["LoadState"],
+                active_state=result["ActiveState"],
+                active_enter=to_timestamp_if_exists(result["ActiveEnterTimestamp"]),
             )
         case "path":
             path_unit = PathUnit(
-                unit=results[0],
-                binds_to=results[1],
-                load_state=results[2],
-                active_state=results[3],
-                active_enter=(
-                    parser.parse(results[4]) if len(results[4].strip()) > 0 else None
-                ),
+                unit=result["Unit"],
+                binds_to=result["BindsTo"],
+                load_state=result["LoadState"],
+                active_state=result["ActiveState"],
+                active_enter=to_timestamp_if_exists(result["ActiveEnterTimestamp"]),
             )
             result = run_sctl_command(check, path_unit.binds_to)
-            if result.returncode != 0:
-                logger.error(
-                    f"Command failed for [{path_unit.binds_to}] "
-                    f"with output:\n{result.stdout}"
-                )
-                return path_unit
-            results = result.stdout.split("\n")
-            path_unit.bind_load_state = results[3]
-            path_unit.bind_active_state = results[4]
-            path_unit.bind_active_enter = (
-                parser.parse(results[5]) if len(results[5].strip()) > 0 else None
-            )
+            path_unit.bind_load_state = result["LoadState"]
+            path_unit.bind_active_state = result["ActiveState"]
+            path_unit.bind_inactive_enter = to_timestamp_if_exists(result["InactiveEnterTimestamp"])
             result = run_sctl_command(check, path_unit.unit)
-            if result.returncode != 0:
-                logger.error(
-                    f"Command failed for [{path_unit.unit}] "
-                    f"with output:\n{result.stdout}"
-                )
-                return path_unit
-            results = result.stdout.split("\n")
-            path_unit.unit_result = results[1]
-            path_unit.unit_load_state = results[3]
-            path_unit.unit_inactive_enter = (
-                parser.parse(results[5]) if len(results[5].strip()) > 0 else None
-            )
+            path_unit.unit_result = result["Result"]
+            path_unit.unit_load_state = result["LoadState"]
+            path_unit.unit_inactive_enter = to_timestamp_if_exists(result["InactiveEnterTimestamp"])
             return path_unit
 
 
@@ -203,7 +196,6 @@ def do_unit_check(check: StatusCheck, output):
     boot_time = datetime.fromtimestamp(psutil.boot_time(), timezone.utc)
     boot_timedelta = datetime.now(timezone.utc) - boot_time
     unit_name = check.unit
-    logger.info(f"Checking unit: [{unit_name}]")
     [_, unit_type] = check.unit.split(".")
     match unit_type:
         case "timer":
@@ -285,9 +277,9 @@ def do_unit_check(check: StatusCheck, output):
                 ),
                 "bind_load_state": path_unit.bind_load_state,
                 "bind_active_state": path_unit.bind_active_state,
-                "bind_active_enter": (
-                    path_unit.bind_active_enter.isoformat()
-                    if path_unit.bind_active_enter is not None
+                "bind_inactive_enter": (
+                    path_unit.bind_inactive_enter.isoformat()
+                    if path_unit.bind_inactive_enter is not None
                     else None
                 ),
                 "unit_state": (
@@ -305,7 +297,6 @@ def do_unit_check(check: StatusCheck, output):
                 ),
             }
             output["status_checks"].append(status_details)
-    logger.info(f"unit status: {status_details}")
 
 
 def get_disk_status(disk: DiskCheck) -> dict[str, str]:
