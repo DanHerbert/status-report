@@ -14,6 +14,8 @@ import yaml
 import psutil
 from dateutil import parser
 
+from config import get_config
+
 
 @dataclass
 class ServiceUnit:
@@ -57,8 +59,8 @@ CONFIG_PATH = os.path.join(SCRIPT_PATH, "config.yaml")
 SCTL = "systemctl"
 
 
-def get_disk_usage(disk: dict[str, str]):
-    cmd_args = shlex.split(f"df --output=pcent {disk['path']}")
+def get_disk_usage(disk: DiskCheck):
+    cmd_args = shlex.split(f"df --output=pcent {disk.path}")
     result = subprocess.run(
         cmd_args,
         stdout=subprocess.PIPE,
@@ -74,13 +76,11 @@ def get_disk_usage(disk: dict[str, str]):
     return pcent
 
 
-def build_sctl_command(
-    check: dict[str, bool | str | int | None], unit: str | None = None
-) -> list[str]:
+def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]:
     cmd_args = [SCTL]
-    if check["is_user"]:
+    if check.is_user:
         cmd_args.append("--user")
-    cmd_args.append(f"--machine={check['machine']}")
+    cmd_args.append(f"--machine={check.machine}")
     cmd_args.append("show")
     cmd_args.append("--value")
     if unit is None:
@@ -104,23 +104,20 @@ def build_sctl_command(
     return cmd_args
 
 
-def run_system_check(check: dict[str, bool | str | list[str] | None], output):
+def run_system_check(check: StatusCheck, output):
     result = run_sctl_command(check)
     if result.returncode != 0:
         logger.error(f"Command failed for [{check}] " f"with output:\n{result.stdout}")
-    if "units" not in check:
-        result_state = result.stdout.strip()
-        output["status_checks"].append(
-            {
-                "label": check["label"],
-                "state": "ok" if result_state == "running" else result_state,
-            }
-        )
+    result_state = result.stdout.strip()
+    output["status_checks"].append(
+        {
+            "label": check.label,
+            "state": "ok" if result_state == "running" else result_state,
+        }
+    )
 
 
-def run_sctl_command(
-    check: dict[str, bool | str | list[str] | None], unit: str | None = None
-):
+def run_sctl_command(check: StatusCheck, unit: str | None = None):
     cmd_args = build_sctl_command(check, unit)
     return subprocess.run(
         cmd_args,
@@ -132,7 +129,7 @@ def run_sctl_command(
     )
 
 
-def run_unit_query(check, unit) -> ServiceUnit | TimerUnit | None:
+def run_unit_query(check: StatusCheck, unit: str) -> ServiceUnit | TimerUnit | None:
     result = run_sctl_command(check, unit)
     if result.returncode != 0:
         logger.error(f"Command failed for [{unit}] " f"with output:\n{result.stdout}")
@@ -202,12 +199,12 @@ def run_unit_query(check, unit) -> ServiceUnit | TimerUnit | None:
             return path_unit
 
 
-def do_unit_check(check, output):
+def do_unit_check(check: StatusCheck, output):
     boot_time = datetime.fromtimestamp(psutil.boot_time(), timezone.utc)
     boot_timedelta = datetime.now(timezone.utc) - boot_time
-    unit_name = check["unit"]
+    unit_name = check.unit
     logger.info(f"Checking unit: [{unit_name}]")
-    [_, unit_type] = check["unit"].split(".")
+    [_, unit_type] = check.unit.split(".")
     match unit_type:
         case "timer":
             timer = run_unit_query(check, unit_name)
@@ -216,7 +213,7 @@ def do_unit_check(check, output):
                 last_trigger_delta = timedelta(seconds=99999999)
             else:
                 last_trigger_delta = datetime.now(timezone.utc) - timer.last_trigger
-            expected_trigger_delta = timedelta(seconds=check["expected_interval_secs"])
+            expected_trigger_delta = timedelta(seconds=check.expected_interval_secs)
             timer_state = (
                 "ok"
                 if last_trigger_delta < expected_trigger_delta
@@ -233,7 +230,7 @@ def do_unit_check(check, output):
                 else service.result
             )
             status_details = {
-                "label": check["label"],
+                "label": check.label,
                 "state": overall_state,
                 "timer_last_trigger": (
                     timer.last_trigger.isoformat()
@@ -252,7 +249,7 @@ def do_unit_check(check, output):
         case "service":
             service = run_unit_query(check, unit_name)
             status_details = {
-                "label": check["label"],
+                "label": check.label,
                 "state": (
                     "ok"
                     if service.load_state == "loaded"
@@ -276,7 +273,7 @@ def do_unit_check(check, output):
                 else path_unit.active_state
             )
             status_details = {
-                "label": check["label"],
+                "label": check.label,
                 "state": overall_state,
                 "load_state": path_unit.load_state,
                 "active_state": path_unit.active_state,
@@ -311,14 +308,14 @@ def do_unit_check(check, output):
     logger.info(f"unit status: {status_details}")
 
 
-def get_disk_status(disk) -> dict[str, str]:
+def get_disk_status(disk: DiskCheck) -> dict[str, str]:
     disk_info = {
-        "label": disk["label"],
-        "path": disk["path"],
+        "label": disk.label,
+        "path": disk.path,
         "usage": get_disk_usage(disk),
     }
-    if "raid" in disk:
-        cmd_args = shlex.split(f"mdadm --detail {disk['raid']}")
+    if disk.raid is not None:
+        cmd_args = shlex.split(f"mdadm --detail {disk.raid}")
         result = subprocess.run(
             cmd_args,
             stdout=subprocess.PIPE,
@@ -372,13 +369,11 @@ def check_needrestart():
 
 def main():
     """Main app execution code."""
-    conf = None
-    with open(CONFIG_PATH, mode="rt", encoding="utf-8") as file_handle:
-        conf = yaml.safe_load(file_handle)
+    conf = get_config()
     logging.basicConfig(
-        format=conf["log_format"],
-        datefmt=conf["log_datefmt"],
-        level=logging.getLevelName(conf["log_level"]),
+        format=conf.log_format,
+        datefmt=conf.log_datefmt,
+        level=conf.log_level,
     )
 
     output = {
@@ -388,25 +383,23 @@ def main():
         "boot_datetime": datetime.fromtimestamp(
             psutil.boot_time(), timezone.utc
         ).isoformat(),
-        "system_name": conf["system_name"],
+        "system_name": conf.system_name,
     }
 
-    for check in conf["status_checks"]:
-        if "unit" not in check:
+    for check in conf.status_checks:
+        if check.unit is None:
             run_system_check(check, output)
         else:
             do_unit_check(check, output)
-    for disk in conf["disks"]:
+    for disk in conf.disks:
         output["disks"].append(get_disk_status(disk))
     output["needrestart"] = check_needrestart()
 
-    with open(
-        conf["json_report_output_file"], mode="wt", encoding="utf-8"
-    ) as output_file:
+    with open(conf.json_report_output_file, mode="wt", encoding="utf-8") as output_file:
         json.dump(output, output_file, indent=2)
 
-    if "scp_command" in conf:
-        cmd_args = shlex.split(conf["scp_command"])
+    if conf.scp_command is not None:
+        cmd_args = shlex.split(conf.scp_command)
         result = subprocess.run(
             cmd_args,
             stdout=subprocess.PIPE,

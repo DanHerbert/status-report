@@ -17,10 +17,14 @@ CONFIG_PATH = os.path.join(SCRIPT_PATH, "config.yaml")
 
 
 def main():
-    with open(CONFIG_PATH, mode="rt", encoding="utf-8") as file_handle:
-        conf = yaml.safe_load(file_handle)
+    conf = get_config()
+    logging.basicConfig(
+        format=conf.log_format,
+        datefmt=conf.log_datefmt,
+        level=conf.log_level,
+    )
 
-    reports_folder = Path(conf["json_reports_search_path"])
+    reports_folder = Path(conf.json_reports_search_path)
     system_reports = []
     all_systems_ok = True
     for file_path in reports_folder.glob("*.json"):
@@ -34,7 +38,7 @@ def main():
                     data["this_system_ok"] = False
                     all_systems_ok = False
             for disk in data["disks"]:
-                if int(disk["usage"].strip("%")) > conf["acceptable_disk_usage"]:
+                if int(disk["usage"].strip("%")) > conf.acceptable_disk_usage:
                     data["this_system_ok"] = False
                     all_systems_ok = False
                 if "failed_devices" in disk and disk["failed_devices"] > 0:
@@ -56,7 +60,7 @@ def main():
     tmpl = env.get_template("status-page.jinja")
 
     out_html = tmpl.render(all_systems_ok=all_systems_ok, system_reports=system_reports)
-    with open(conf["html_report_output_file"], "w", encoding="utf-8") as f:
+    with open(conf.html_report_output_file, "w", encoding="utf-8") as f:
         f.write(out_html)
 
 
