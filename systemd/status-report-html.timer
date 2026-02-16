@@ -2,10 +2,11 @@
 Description=Periodic HTML status report generation
 After=network-online.target
 
+; The HTML report generation is fast (well under 1s) so this can run relatively frequently
 [Timer]
 Unit=status-report-html.service
-OnBootSec=1m
-OnUnitActiveSec=1m
+OnBootSec=10s
+OnUnitActiveSec=10s
 
 [Install]
 WantedBy=timers.target
