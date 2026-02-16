@@ -6,10 +6,9 @@ import logging
 import os
 from pathlib import Path
 
-import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from config import get_config, DiskCheck, StatusCheck
+from .config import get_config
 
 
 logger = logging.getLogger("gen_report_html")
@@ -19,6 +18,7 @@ CONFIG_PATH = os.path.join(SCRIPT_PATH, "config.yaml")
 
 
 def main():
+    """Main app execution code."""
     conf = get_config()
     logging.basicConfig(
         format=conf.log_format,
@@ -32,7 +32,7 @@ def main():
     for file_path in reports_folder.glob("*.json"):
         with file_path.open(encoding="utf-8") as f:
             data = json.load(f)
-            logger.info(f"parsed json: {data}")
+            logger.info("parsed json: %s", data)
             data["this_system_ok"] = True
             system_reports.append(data)
             for item in data["status_checks"]:

@@ -6,19 +6,18 @@ import logging
 import os
 import shlex
 import subprocess
-import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-import yaml
 import psutil
 from dateutil import parser
 
-from config import get_config, DiskCheck, StatusCheck
+from .config import get_config, DiskCheck, StatusCheck
 
 
 @dataclass
 class ServiceUnit:
+    """Information about a Systemd service unit"""
     service_type: str
     result: str
     triggered_by: str
@@ -29,6 +28,7 @@ class ServiceUnit:
 
 @dataclass
 class TimerUnit:
+    """Information about a Systemd timer unit."""
     unit: str
     last_trigger: datetime
     load_state: str
@@ -36,8 +36,10 @@ class TimerUnit:
     active_enter: datetime
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class PathUnit:
+    """Information about a Systemd path unit."""
     load_state: str
     active_state: str
     active_enter: datetime
@@ -60,6 +62,7 @@ SCTL = "systemctl"
 
 
 def get_disk_usage(disk: DiskCheck):
+    """Get disk usage (as a percent) for the given disk."""
     cmd_args = shlex.split(f"df --output=pcent {disk.path}")
     result = subprocess.run(
         cmd_args,
@@ -70,13 +73,14 @@ def get_disk_usage(disk: DiskCheck):
         check=False,
     )
     if result.returncode != 0:
-        logger.error(f"Command failed with output:\n{result.stdout}")
+        logger.error("Command failed with output:\n%s", result.stdout)
     results = result.stdout.strip().split("\n")
     pcent = results[1].strip()
     return pcent
 
 
 def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]:
+    """Build `systemctl show` command args to be passed into subprocess.run()"""
     cmd_args = [SCTL]
     if check.is_user:
         cmd_args.append("--user")
@@ -89,11 +93,13 @@ def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]
         match unit_type:
             case "service":
                 cmd_args.append(
-                    "--property=Type,Result,TriggeredBy,LoadState,ActiveState,InactiveEnterTimestamp"
+                    "--property=Type,Result,TriggeredBy,LoadState,"
+                    "ActiveState,InactiveEnterTimestamp"
                 )
             case "timer":
                 cmd_args.append(
-                    "--property=Unit,LastTriggerUSec,LoadState,ActiveState,ActiveEnterTimestamp"
+                    "--property=Unit,LastTriggerUSec,LoadState,ActiveState,"
+                    "ActiveEnterTimestamp"
                 )
             case "path":
                 cmd_args.append(
@@ -104,6 +110,7 @@ def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]
 
 
 def run_system_check(check: StatusCheck, output):
+    """Get the system state for a given machine."""
     result = run_sctl_command(check)
     sys_state = result["SystemState"]
     output["status_checks"].append(
@@ -115,6 +122,7 @@ def run_system_check(check: StatusCheck, output):
 
 
 def run_sctl_command(check: StatusCheck, unit: str | None = None):
+    """Run a `systemctl show` command and parse the results as a dictionary."""
     cmd_args = build_sctl_command(check, unit)
     result = subprocess.run(
         cmd_args,
@@ -126,8 +134,10 @@ def run_sctl_command(check: StatusCheck, unit: str | None = None):
     )
     if result.returncode != 0:
         logger.error(
-            f"Command [{' '.join(cmd_args)}] failed for [{unit}] "
-            f"with output:\n{result.stdout}"
+            "Command [%s] failed for [%s] with output:\n%s",
+            ' '.join(cmd_args),
+            unit,
+            result.stdout
         )
         return None
     results = result.stdout.split("\n")
@@ -140,6 +150,7 @@ def run_sctl_command(check: StatusCheck, unit: str | None = None):
 
 
 def to_timestamp_if_exists(timestamp: str) -> datetime | None:
+    """Parse a systemd timestamp only if a value exists."""
     return (
         parser.parse(timestamp)
         if timestamp is not None and len(timestamp.strip()) > 0
@@ -150,22 +161,18 @@ def to_timestamp_if_exists(timestamp: str) -> datetime | None:
 def run_unit_query(
     check: StatusCheck, unit: str
 ) -> ServiceUnit | TimerUnit | PathUnit | None:
+    """Query a systemd unit for details about it."""
     result = run_sctl_command(check, unit)
     [_, unit_type] = unit.split(".")
     match unit_type:
         case "service":
-            inactive_enter = result["InactiveEnterTimestamp"]
             return ServiceUnit(
                 service_type=result["Type"],
                 result=result["Result"],
                 triggered_by=result["TriggeredBy"],
                 load_state=result["LoadState"],
                 active_state=result["ActiveState"],
-                inactive_enter=(
-                    parser.parse(inactive_enter)
-                    if len(inactive_enter.strip()) > 0
-                    else None
-                ),
+                inactive_enter=to_timestamp_if_exists(result["InactiveEnterTimestamp"]),
             )
         case "timer":
             return TimerUnit(
@@ -198,123 +205,137 @@ def run_unit_query(
             return path_unit
 
 
-def do_unit_check(check: StatusCheck, output):
+def do_timer_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
+    """Perform logic checks for a Systemd timer unit."""
     boot_time = datetime.fromtimestamp(psutil.boot_time(), timezone.utc)
     boot_timedelta = datetime.now(timezone.utc) - boot_time
     unit_name = check.unit
+    timer = run_unit_query(check, unit_name)
+    service = run_unit_query(check, timer.unit)
+    if timer.last_trigger is None:
+        last_trigger_delta = timedelta(seconds=99999999)
+    else:
+        last_trigger_delta = datetime.now(timezone.utc) - timer.last_trigger
+    expected_trigger_delta = timedelta(seconds=check.expected_interval_secs)
+    timer_state = (
+        "ok"
+        if timer.active_state == "active"
+        and (
+            last_trigger_delta < expected_trigger_delta
+            or (
+                timer.active_enter is not None
+                and boot_timedelta < expected_trigger_delta
+                # After a reboot, last_trigger is empty, so if there has been a
+                # recent reboot, assume timer is ok if it is active.
+                and (timer.active_enter - boot_time).total_seconds() < 120
+            )
+        )
+        else timer.active_state
+    )
+    service_state = "ok" if service.result == "success" else service.result
+    service_last_trigger = service.inactive_enter
+    if service.inactive_enter is None:
+        service_last_trigger = timer.last_trigger
+    overall_state = (
+        "ok"
+        if timer_state == "ok" and service_state == "ok"
+        else service.result
+    )
+    return {
+        "label": check.label,
+        "state": overall_state,
+        "timer_last_trigger": (
+            timer.last_trigger.isoformat()
+            if timer.last_trigger is not None
+            else None
+        ),
+        "timer_active_state": timer.active_state,
+        "service_result": service_state,
+        "service_last_trigger": (
+            service_last_trigger.isoformat()
+            if service_last_trigger is not None
+            else None
+        ),
+    }
+
+
+def do_service_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
+    """Perform logic checks for a Systemd service unit."""
+    service = run_unit_query(check, check.unit)
+    return {
+        "label": check.label,
+        "state": (
+            "ok"
+            if service.load_state == "loaded"
+            and service.active_state == "active"
+            else service.active_state
+        ),
+        "load_state": service.load_state,
+        "active_state": service.active_state,
+    }
+
+
+def do_path_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
+    """Perform logic checks for a Systemd path unit."""
+    path_unit = run_unit_query(check, check.unit)
+    overall_state = (
+        "ok"
+        if path_unit.load_state == "loaded"
+        and path_unit.active_state == "active"
+        and path_unit.bind_load_state == "loaded"
+        and path_unit.bind_active_state == "active"
+        and path_unit.unit_load_state == "loaded"
+        and path_unit.unit_result == "success"
+        else path_unit.active_state
+    )
+    return {
+        "label": check.label,
+        "state": overall_state,
+        "load_state": path_unit.load_state,
+        "active_state": path_unit.active_state,
+        "bind_state": (
+            "ok"
+            if path_unit.bind_load_state == "loaded"
+            and path_unit.bind_active_state == "active"
+            else path_unit.bind_active_state
+        ),
+        "bind_load_state": path_unit.bind_load_state,
+        "bind_active_state": path_unit.bind_active_state,
+        "bind_inactive_enter": (
+            path_unit.bind_inactive_enter.isoformat()
+            if path_unit.bind_inactive_enter is not None
+            else None
+        ),
+        "unit_state": (
+            "ok"
+            if path_unit.unit_load_state == "loaded"
+            and path_unit.unit_result == "success"
+            else path_unit.unit_result
+        ),
+        "unit_load_state": path_unit.unit_load_state,
+        "unit_result": path_unit.unit_result,
+        "unit_inactive_enter": (
+            path_unit.unit_inactive_enter.isoformat()
+            if path_unit.unit_inactive_enter is not None
+            else None
+        ),
+    }
+
+
+def do_unit_check_logic(check: StatusCheck, output: list[dict[str,str|None]]):
+    """Query a systemd unit and append the results to output"""
     [_, unit_type] = check.unit.split(".")
     match unit_type:
         case "timer":
-            timer = run_unit_query(check, unit_name)
-            service = run_unit_query(check, timer.unit)
-            if timer.last_trigger is None:
-                last_trigger_delta = timedelta(seconds=99999999)
-            else:
-                last_trigger_delta = datetime.now(timezone.utc) - timer.last_trigger
-            expected_trigger_delta = timedelta(seconds=check.expected_interval_secs)
-            timer_state = (
-                "ok"
-                if timer.active_state == "active"
-                and (
-                    last_trigger_delta < expected_trigger_delta
-                    or (
-                        timer.active_enter is not None
-                        and boot_timedelta < expected_trigger_delta
-                        # After a reboot, last_trigger is empty, so if there has been a
-                        # recent reboot, assume timer is ok if it is active.
-                        and (timer.active_enter - boot_time).total_seconds() < 120
-                    )
-                )
-                else timer.active_state
-            )
-            service_state = "ok" if service.result == "success" else service.result
-            service_last_trigger = service.inactive_enter
-            if service.inactive_enter is None:
-                service_last_trigger = timer.last_trigger
-            overall_state = (
-                "ok"
-                if timer_state == "ok" and service_state == "ok"
-                else service.result
-            )
-            status_details = {
-                "label": check.label,
-                "state": overall_state,
-                "timer_last_trigger": (
-                    timer.last_trigger.isoformat()
-                    if timer.last_trigger is not None
-                    else None
-                ),
-                "timer_active_state": timer.active_state,
-                "service_result": service_state,
-                "service_last_trigger": (
-                    service_last_trigger.isoformat()
-                    if service_last_trigger is not None
-                    else None
-                ),
-            }
-            output["status_checks"].append(status_details)
+            output["status_checks"].append(do_timer_unit_check_logic(check))
         case "service":
-            service = run_unit_query(check, unit_name)
-            status_details = {
-                "label": check.label,
-                "state": (
-                    "ok"
-                    if service.load_state == "loaded"
-                    and service.active_state == "active"
-                    else service.active_state
-                ),
-                "load_state": service.load_state,
-                "active_state": service.active_state,
-            }
-            output["status_checks"].append(status_details)
+            output["status_checks"].append(do_service_unit_check_logic(check))
         case "path":
-            path_unit = run_unit_query(check, unit_name)
-            overall_state = (
-                "ok"
-                if path_unit.load_state == "loaded"
-                and path_unit.active_state == "active"
-                and path_unit.bind_load_state == "loaded"
-                and path_unit.bind_active_state == "active"
-                and path_unit.unit_load_state == "loaded"
-                and path_unit.unit_result == "success"
-                else path_unit.active_state
-            )
-            status_details = {
-                "label": check.label,
-                "state": overall_state,
-                "load_state": path_unit.load_state,
-                "active_state": path_unit.active_state,
-                "bind_state": (
-                    "ok"
-                    if path_unit.bind_load_state == "loaded"
-                    and path_unit.bind_active_state == "active"
-                    else path_unit.bind_active_state
-                ),
-                "bind_load_state": path_unit.bind_load_state,
-                "bind_active_state": path_unit.bind_active_state,
-                "bind_inactive_enter": (
-                    path_unit.bind_inactive_enter.isoformat()
-                    if path_unit.bind_inactive_enter is not None
-                    else None
-                ),
-                "unit_state": (
-                    "ok"
-                    if path_unit.unit_load_state == "loaded"
-                    and path_unit.unit_result == "success"
-                    else path_unit.unit_result
-                ),
-                "unit_load_state": path_unit.unit_load_state,
-                "unit_result": path_unit.unit_result,
-                "unit_inactive_enter": (
-                    path_unit.unit_inactive_enter.isoformat()
-                    if path_unit.unit_inactive_enter is not None
-                    else None
-                ),
-            }
-            output["status_checks"].append(status_details)
+            output["status_checks"].append(do_path_unit_check_logic(check))
 
 
 def get_disk_status(disk: DiskCheck) -> dict[str, str]:
+    """Get status for a given disk check."""
     disk_info = {
         "label": disk.label,
         "path": disk.path,
@@ -331,7 +352,7 @@ def get_disk_status(disk: DiskCheck) -> dict[str, str]:
             check=False,
         )
         if result.returncode != 0:
-            logger.error(f"Command failed with output:\n{result.stdout}")
+            logger.error("Command failed with output:\n%s", result.stdout)
         failed_devices = -1
         for line in result.stdout.split("\n"):
             if line.strip().startswith("Failed Devices"):
@@ -341,6 +362,7 @@ def get_disk_status(disk: DiskCheck) -> dict[str, str]:
 
 
 def check_needrestart():
+    """Check the `needrestart` command for anything needing a restart."""
     cmd_args = shlex.split("needrestart -b")
     result = subprocess.run(
         cmd_args,
@@ -353,16 +375,19 @@ def check_needrestart():
     services_needing_restarts = 0
     users_with_outdated_binaries = 0
     for line in result.stdout.split("\n"):
+        current_kernel = '1'
+        expected_kernel = '2'
+        current_kernel_status = 1
         if line.startswith("NEEDRESTART-KCUR:"):
             [_, current_kernel] = line.split(": ")
-        if line.startswith("NEEDRESTART-KEXP:"):
+        elif line.startswith("NEEDRESTART-KEXP:"):
             [_, expected_kernel] = line.split(": ")
-        if line.startswith("NEEDRESTART-KSTA"):
+        elif line.startswith("NEEDRESTART-KSTA"):
             [_, current_kernel_status] = line.split(": ")
             current_kernel_status = int(current_kernel_status)
-        if line.startswith("NEEDRESTART-SVC"):
+        elif line.startswith("NEEDRESTART-SVC"):
             services_needing_restarts += 1
-        if line.startswith("NEEDRESTART-SESS"):
+        elif line.startswith("NEEDRESTART-SESS"):
             users_with_outdated_binaries += 1
     return {
         "outdated_kernel": (
@@ -396,7 +421,7 @@ def main():
         if check.unit is None:
             run_system_check(check, output)
         else:
-            do_unit_check(check, output)
+            do_unit_check_logic(check, output)
     for disk in conf.disks:
         output["disks"].append(get_disk_status(disk))
     output["needrestart"] = check_needrestart()
@@ -415,7 +440,7 @@ def main():
             check=False,
         )
         if result.returncode != 0:
-            logger.error(f"Command failed with output:\n{result.stdout}")
+            logger.error("Command failed with output:\n%s", result.stdout)
         else:
             logger.info("Uploaded status report based on configured command")
 
