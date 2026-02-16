@@ -377,21 +377,24 @@ def check_needrestart():
     )
     services_needing_restarts = 0
     users_with_outdated_binaries = 0
+    current_kernel = '1'
+    expected_kernel = '2'
+    current_kernel_status = 1
     for line in result.stdout.split("\n"):
-        current_kernel = '1'
-        expected_kernel = '2'
-        current_kernel_status = 1
-        if line.startswith("NEEDRESTART-KCUR:"):
-            [_, current_kernel] = line.split(": ")
-        elif line.startswith("NEEDRESTART-KEXP:"):
-            [_, expected_kernel] = line.split(": ")
-        elif line.startswith("NEEDRESTART-KSTA"):
-            [_, current_kernel_status] = line.split(": ")
-            current_kernel_status = int(current_kernel_status)
-        elif line.startswith("NEEDRESTART-SVC"):
-            services_needing_restarts += 1
-        elif line.startswith("NEEDRESTART-SESS"):
-            users_with_outdated_binaries += 1
+        if len(line.split(": ")) < 2:
+            continue
+        [key, val] = line.split(": ")
+        match key:
+            case "NEEDRESTART-KCUR":
+                current_kernel = val
+            case "NEEDRESTART-KEXP":
+                expected_kernel = val
+            case "NEEDRESTART-KSTA":
+                current_kernel_status = int(val)
+            case "NEEDRESTART-SVC":
+                services_needing_restarts += 1
+            case "NEEDRESTART-SESS":
+                users_with_outdated_binaries += 1
     return {
         "outdated_kernel": (
             current_kernel_status != 1 or current_kernel != expected_kernel
