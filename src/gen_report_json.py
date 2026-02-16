@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 import psutil
 from dateutil import parser
 
-from .config import get_config, DiskCheck, StatusCheck
+from config import get_config, DiskCheck, StatusCheck
 
 
 @dataclass
@@ -112,13 +112,16 @@ def build_sctl_command(check: StatusCheck, unit: str | None = None) -> list[str]
 def run_system_check(check: StatusCheck, output):
     """Get the system state for a given machine."""
     result = run_sctl_command(check)
-    sys_state = result["SystemState"]
-    output["status_checks"].append(
-        {
-            "label": check.label,
-            "state": "ok" if sys_state == "running" else sys_state,
-        }
-    )
+    if result is None:
+        output["status_checks"].append({"label": check.label, "state": "Unknown"})
+    else:
+        sys_state = result["SystemState"]
+        output["status_checks"].append(
+            {
+                "label": check.label,
+                "state": "ok" if sys_state == "running" else sys_state,
+            }
+        )
 
 
 def run_sctl_command(check: StatusCheck, unit: str | None = None):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from .config import get_config
+from config import get_config
 
 
 logger = logging.getLogger("gen_report_html")

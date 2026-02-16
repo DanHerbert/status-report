@@ -2,8 +2,7 @@
 
 import logging
 import os
-from datetime import timedelta
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +13,7 @@ CONFIG_PATH = os.path.join(SCRIPT_PATH, "../config/", "config.yaml")
 
 @dataclass
 class StatusCheck:
+    """Status check configuration."""
     label: str
     machine: str
     is_user: bool = False
@@ -23,13 +23,16 @@ class StatusCheck:
 
 @dataclass
 class DiskCheck:
+    """Disk check configuration."""
     label: str
     path: Path
     raid: Optional[Path] = None
 
 
+# pylint: disable=too-many-instance-attributes
 @dataclass
 class Config:
+    """App config."""
     log_level: str
     log_format: str
     log_datefmt: str
