@@ -18,6 +18,7 @@ from config import get_config, DiskCheck, StatusCheck
 @dataclass
 class ServiceUnit:
     """Information about a Systemd service unit"""
+
     service_type: str
     result: str
     triggered_by: str
@@ -29,6 +30,7 @@ class ServiceUnit:
 @dataclass
 class TimerUnit:
     """Information about a Systemd timer unit."""
+
     unit: str
     last_trigger: datetime
     load_state: str
@@ -40,6 +42,7 @@ class TimerUnit:
 @dataclass
 class PathUnit:
     """Information about a Systemd path unit."""
+
     load_state: str
     active_state: str
     active_enter: datetime
@@ -74,6 +77,7 @@ def get_disk_usage(disk: DiskCheck):
     )
     if result.returncode != 0:
         logger.error("Command failed with output:\n%s", result.stdout)
+        return None
     results = result.stdout.strip().split("\n")
     pcent = results[1].strip()
     return pcent
@@ -138,9 +142,9 @@ def run_sctl_command(check: StatusCheck, unit: str | None = None):
     if result.returncode != 0:
         logger.error(
             "Command [%s] failed for [%s] with output:\n%s",
-            ' '.join(cmd_args),
+            " ".join(cmd_args),
             unit,
-            result.stdout
+            result.stdout,
         )
         return None
     results = result.stdout.split("\n")
@@ -208,7 +212,7 @@ def run_unit_query(
             return path_unit
 
 
-def do_timer_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
+def do_timer_unit_check_logic(check: StatusCheck) -> dict[str, str | None]:
     """Perform logic checks for a Systemd timer unit."""
     boot_time = datetime.fromtimestamp(psutil.boot_time(), timezone.utc)
     boot_timedelta = datetime.now(timezone.utc) - boot_time
@@ -240,17 +244,13 @@ def do_timer_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
     if service.inactive_enter is None:
         service_last_trigger = timer.last_trigger
     overall_state = (
-        "ok"
-        if timer_state == "ok" and service_state == "ok"
-        else service.result
+        "ok" if timer_state == "ok" and service_state == "ok" else service.result
     )
     return {
         "label": check.label,
         "state": overall_state,
         "timer_last_trigger": (
-            timer.last_trigger.isoformat()
-            if timer.last_trigger is not None
-            else None
+            timer.last_trigger.isoformat() if timer.last_trigger is not None else None
         ),
         "timer_active_state": timer.active_state,
         "service_result": service_state,
@@ -262,15 +262,14 @@ def do_timer_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
     }
 
 
-def do_service_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
+def do_service_unit_check_logic(check: StatusCheck) -> dict[str, str | None]:
     """Perform logic checks for a Systemd service unit."""
     service = run_unit_query(check, check.unit)
     return {
         "label": check.label,
         "state": (
             "ok"
-            if service.load_state == "loaded"
-            and service.active_state == "active"
+            if service.load_state == "loaded" and service.active_state == "active"
             else service.active_state
         ),
         "load_state": service.load_state,
@@ -278,7 +277,7 @@ def do_service_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
     }
 
 
-def do_path_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
+def do_path_unit_check_logic(check: StatusCheck) -> dict[str, str | None]:
     """Perform logic checks for a Systemd path unit."""
     path_unit = run_unit_query(check, check.unit)
     overall_state = (
@@ -325,7 +324,7 @@ def do_path_unit_check_logic(check: StatusCheck) -> dict[str,str|None]:
     }
 
 
-def do_unit_check_logic(check: StatusCheck, output: list[dict[str,str|None]]):
+def do_unit_check_logic(check: StatusCheck, output: list[dict[str, str | None]]):
     """Query a systemd unit and append the results to output"""
     [_, unit_type] = check.unit.split(".")
     match unit_type:
@@ -377,8 +376,8 @@ def check_needrestart():
     )
     services_needing_restarts = 0
     users_with_outdated_binaries = 0
-    current_kernel = '1'
-    expected_kernel = '2'
+    current_kernel = "1"
+    expected_kernel = "2"
     current_kernel_status = 1
     for line in result.stdout.split("\n"):
         if len(line.split(": ")) < 2:
